@@ -87,13 +87,4 @@ python3 3-huffman-streaming/demo/huffman-streaming-demo.py
 
 ---
 
-## 🧪 Tests & Validation
 
-* Tous les fichiers compressés peuvent être décompressés avec exactitude.
-* Comparaison possible avec `diff` :
-
-```bash
-diff le-horla.txt le-horla-decompressed.txt
-```
-
-Aucune sortie signifie que la compression/décompression a été **bit à bit fidèle** ✅
