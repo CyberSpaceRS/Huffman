@@ -97,10 +97,3 @@ diff le-horla.txt le-horla-decompressed.txt
 ```
 
 Aucune sortie signifie que la compression/décompression a été **bit à bit fidèle** ✅
-
----
-
-## 👨‍💻 Auteurs
-
-* Tristan Joncour — BUT Informatique — ENSIBS 2025
-* Projet réalisé dans le cadre du module compression de données
