@@ -9,6 +9,8 @@ Ce projet implémente trois variantes de l’algorithme de Huffman pour la compr
 
 ## 🗂 Arborescence du projet
 
+```
+
 .
 ├── le-horla.txt                   # Fichier original à compresser
 ├── le-horla.huf                  # Fichier compressé (sortie)
@@ -27,6 +29,9 @@ Ce projet implémente trois variantes de l’algorithme de Huffman pour la compr
 └── demo/
 └── huffman-streaming-demo.py
 
+````
+
+---
 
 ## 🚀 Utilisation
 
@@ -43,7 +48,7 @@ python3 1-huffman-static/huffman-static.py -e le-horla.txt -o le-horla.huf
 
 # Décompression
 python3 1-huffman-static/huffman-static.py -d le-horla.huf -o le-horla-decompressed.txt
-```
+````
 
 ---
 
