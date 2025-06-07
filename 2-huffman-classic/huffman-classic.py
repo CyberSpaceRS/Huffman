@@ -2,135 +2,214 @@
 # -*- coding: utf-8 -*-
 
 import argparse
-import heapq
-from collections import Counter
 
-# Classe représentant un nœud de l’arbre de Huffman
-class Node:
-    def __init__(self, symbol=None, freq=0, left=None, right=None):
-        self.symbol = symbol      # caractère (feuille) ou None (nœud interne)
-        self.freq = freq          # fréquence du caractère
-        self.left = left          # sous-arbre gauche
-        self.right = right        # sous-arbre droit
-    def __lt__(self, other):
-        return self.freq < other.freq  # pour comparaison dans la heap
 
-# Construit un arbre de Huffman à partir d’un dictionnaire de fréquences
-def build_tree(freq_dict):
-    heap = [Node(s, f) for s, f in freq_dict.items()]  # crée des nœuds pour chaque caractère
-    heapq.heapify(heap)  # transforme en tas min
-    while len(heap) > 1:
-        n1 = heapq.heappop(heap)
-        n2 = heapq.heappop(heap)
-        heapq.heappush(heap, Node(None, n1.freq + n2.freq, n1, n2))
-    return heap[0]
+class Noeud:
+    def __init__(self, frequence=0, caractere=None, gauche=None, droite=None):
+        # Un nœud de l'arbre de Huffman, contenant un caractère, sa fréquence
+        # et des références aux sous-arbres gauche et droit
+        self.caractere = caractere
+        self.frequence = frequence
+        self.gauche = gauche
+        self.droite = droite
 
-# Construit la table de codage de Huffman depuis l’arbre
-def build_codes(node, prefix="", table=None):
+
+def compter_frequences(texte):
+    """Compte les fréquences des caractères dans un texte."""
+    # Crée un dictionnaire où chaque caractère est une clé et sa fréquence est la valeur
+    frequences = {}
+    for caractere in texte:
+        frequences[caractere] = frequences.get(caractere, 0) + 1
+    return frequences
+
+
+def construire_arbre(dictionnaire_frequences):
+    """Construit l'arbre de Huffman à partir d'un dictionnaire de fréquences."""
+    # Crée une liste de nœuds à partir des fréquences des caractères
+    liste_noeuds = [Noeud(frequence=f, caractere=c) for c, f in dictionnaire_frequences.items() if f > 0]
+
+    # cas spéciaux
+    if not liste_noeuds:
+        # Si aucun caractère n'est présent, retourne None
+        return None
+    if len(liste_noeuds) == 1:
+        # Si un seul caractère est présent, retourne ce nœud comme racine
+        return liste_noeuds[0]
+
+    # Combine les deux nœuds de plus faible fréquence jusqu'à ce qu'il ne reste qu'un seul nœud
+    while len(liste_noeuds) > 1:
+        liste_noeuds.sort(key=lambda noeud: noeud.frequence)  # Trie par fréquence croissante
+        a = liste_noeuds.pop(0)  # Nœud avec la plus petite fréquence
+        b = liste_noeuds.pop(0)  # Deuxième plus petite fréquence
+
+        # Crée un nœud parent avec la somme des fréquences
+        parent = Noeud(frequence=a.frequence + b.frequence, gauche=a, droite=b)
+        liste_noeuds.append(parent)
+
+    return liste_noeuds[0]  # Le dernier nœud est la racine de l'arbre
+
+
+def generer_codes(noeud, prefixe="", table=None):
+    """Génère un dictionnaire de codes binaires à partir de l'arbre de Huffman."""
     if table is None:
         table = {}
-    if node.symbol is not None:
-        table[node.symbol] = prefix  # feuille → code binaire
+
+    if noeud is None:
+        return table
+
+    if noeud.caractere is not None:
+        # Si le nœud est une feuille, associe le caractère au code binaire
+        table[noeud.caractere] = prefixe if prefixe else "0"
     else:
-        build_codes(node.left, prefix + "0", table)
-        build_codes(node.right, prefix + "1", table)
+        # Parcours récursif des sous-arbres gauche et droit
+        if noeud.gauche:
+            generer_codes(noeud.gauche, prefixe + "0", table)
+        if noeud.droite:
+            generer_codes(noeud.droite, prefixe + "1", table)
+
     return table
 
-# Sérialise l’arbre sous forme binaire pour l’inclure dans le fichier compressé
-def serialize_tree(node):
-    if node.symbol is not None:
-        encoded = node.symbol.encode("utf-8")
-        return "1" + format(len(encoded), "08b") + ''.join(f"{b:08b}" for b in encoded)
-    return "0" + serialize_tree(node.left) + serialize_tree(node.right)
 
-# Désérialise un arbre Huffman depuis une chaîne de bits
-def deserialize_tree(bits, index=0):
-    if bits[index] == "1":
-        length = int(bits[index+1:index+9], 2)
-        index += 9
-        data = bytes(int(bits[index+i:index+i+8], 2) for i in range(0, 8 * length, 8))
-        symbol = data.decode("utf-8")
-        index += 8 * length
-        return Node(symbol=symbol), index
-    index += 1
-    left, i1 = deserialize_tree(bits, index)
-    right, i2 = deserialize_tree(bits, i1)
-    return Node(left=left, right=right), i2
+def serialiser_arbre(noeud):
+    """Sérialise l'arbre de Huffman en une chaîne de bits."""
+    if noeud is None:
+        return ""
 
-# Encode le texte avec la table de Huffman
-def encode(text, code_table):
-    return ''.join(code_table[c] for c in text)
+    if noeud.caractere is not None:
+        # Sérialise une feuille : "1" suivi de la longueur et des bits du caractère
+        encodage = noeud.caractere.encode("utf-8")
+        longueur_symbole = format(len(encodage), "08b")
+        bits_symbole = "".join(f"{octet:08b}" for octet in encodage)
+        return "1" + longueur_symbole + bits_symbole
 
-# Ajoute un padding pour garantir un alignement sur 8 bits
-def pad_bits(bits):
-    pad_len = (8 - len(bits) % 8) % 8
-    return f"{pad_len:08b}" + bits + "0" * pad_len
+    # Sérialise récursivement les sous-arbres gauche et droit
+    gauche_bits = serialiser_arbre(noeud.gauche) if noeud.gauche else ""
+    droite_bits = serialiser_arbre(noeud.droite) if noeud.droite else ""
+    return "0" + gauche_bits + droite_bits
 
-# Supprime le padding lors de la lecture
-def unpad_bits(bits):
-    pad_len = int(bits[:8], 2)
-    return bits[8:-pad_len] if pad_len > 0 else bits[8:]
 
-# Convertit une chaîne de bits en octets
-def bits_to_bytes(bits):
-    return bytes(int(bits[i:i+8], 2) for i in range(0, len(bits), 8))
+def deserialiser_arbre(bits, index_ref):
+    """Désérialise un arbre de Huffman à partir d'une chaîne de bits."""
+    if index_ref[0] >= len(bits):
+        return None, index_ref[0]
 
-# Convertit une séquence d’octets en chaîne de bits
-def bytes_to_bits(b):
-    return ''.join(f"{byte:08b}" for byte in b)
+    bit_courant = bits[index_ref[0]]
+    index_ref[0] += 1
 
-# Décodage d’une chaîne de bits à l’aide de l’arbre
-def decode(bits, root):
-    result = []
-    i = 0
-    while i < len(bits):
-        current = root
-        while current.symbol is None:
-            current = current.left if bits[i] == "0" else current.right
-            i += 1
-        result.append(current.symbol)
-    return ''.join(result)
+    if bit_courant == "1":
+        # Désérialise une feuille : lit la longueur et les bits du caractère
+        longueur = int(bits[index_ref[0]:index_ref[0] + 8], 2)
+        index_ref[0] += 8
+        symbole_bits = bits[index_ref[0]:index_ref[0] + (longueur * 8)]
+        index_ref[0] += longueur * 8
+        symbole = bytes(int(symbole_bits[i:i + 8], 2) for i in range(0, len(symbole_bits), 8)).decode("utf-8")
+        return Noeud(caractere=symbole), index_ref[0]
+    else:
+        # Désérialise récursivement les sous-arbres gauche et droit
+        gauche, _ = deserialiser_arbre(bits, index_ref)
+        droite, _ = deserialiser_arbre(bits, index_ref)
+        return Noeud(gauche=gauche, droite=droite), index_ref[0]
 
-# Fonction principale de compression
-def compress(input_path, output_path):
-    with open(input_path, "r", encoding="utf-8") as f:
-        text = f.read()
-    freq = Counter(text)                  # calcule les fréquences réelles
-    root = build_tree(freq)              # construit l’arbre Huffman
-    code_table = build_codes(root)       # génère la table de codage
-    tree_bits = serialize_tree(root)     # encode l’arbre
-    data_bits = encode(text, code_table) # encode les données
-    full_bits = tree_bits + data_bits    # concatène les deux
-    padded = pad_bits(full_bits)         # ajoute le padding
-    byte_data = bits_to_bytes(padded)    # transforme en octets
-    with open(output_path, "wb") as out:
-        out.write(byte_data)
 
-# Fonction principale de décompression
-def decompress(input_path, output_path):
-    with open(input_path, "rb") as f:
-        byte_data = f.read()
-    bit_str = bytes_to_bits(byte_data)
-    bits = unpad_bits(bit_str)
-    root, index = deserialize_tree(bits)         # reconstruit l’arbre
-    text = decode(bits[index:], root)            # décode les données
-    with open(output_path, "w", encoding="utf-8") as f:
-        f.write(text)
+def encoder(texte, table_codes):
+    """Encode un texte en une chaîne de bits selon une table de codes."""
+    # Remplace chaque caractère par son code binaire
+    return ''.join(table_codes[caractere] for caractere in texte)
 
-# Interface CLI
+
+def ajouter_padding(bits):
+    """Ajoute du padding pour aligner les bits sur un multiple de 8."""
+    longueur_padding = (8 - len(bits) % 8) % 8
+    return f"{longueur_padding:08b}" + bits + "0" * longueur_padding
+
+
+def retirer_padding(bits):
+    """Supprime le padding d'une chaîne de bits."""
+    longueur_padding = int(bits[:8], 2)
+    return bits[8:len(bits) - longueur_padding]
+
+
+def bits_vers_octets(bits):
+    """Convertit une chaîne de bits en octets."""
+    return bytes(int(bits[i:i + 8], 2) for i in range(0, len(bits), 8))
+
+
+def octets_vers_bits(octets):
+    """Convertit des octets en une chaîne de bits."""
+    return ''.join(f"{octet:08b}" for octet in octets)
+
+
+def decoder(bits, racine):
+    """Décode une chaîne de bits en texte à l'aide de l'arbre de Huffman."""
+    if not racine or not bits:
+        return ""
+
+    resultat = []
+    noeud_courant = racine
+    for bit in bits:
+        # Parcours l'arbre selon les bits (0 = gauche, 1 = droite)
+        noeud_courant = noeud_courant.gauche if bit == "0" else noeud_courant.droite
+        if noeud_courant.caractere is not None:
+            # Si une feuille est atteinte, ajoute le caractère au résultat
+            resultat.append(noeud_courant.caractere)
+            noeud_courant = racine
+
+    return ''.join(resultat)
+
+
+def compresser(chemin_entree, chemin_sortie):
+    """Compresse un fichier texte en fichier binaire avec Huffman."""
+    with open(chemin_entree, "r", encoding="utf-8") as fichier:
+        texte = fichier.read()
+
+    if not texte:
+        # Si le fichier est vide, crée un fichier de sortie vide
+        with open(chemin_sortie, "wb") as fichier_sortie:
+            fichier_sortie.write(b"")
+        return
+
+    # Étapes de la compression : fréquences -> arbre -> codes -> bits -> octets
+    frequences = compter_frequences(texte)
+    racine = construire_arbre(frequences)
+    table_codes = generer_codes(racine)
+    bits_arbre = serialiser_arbre(racine)
+    bits_donnees = encoder(texte, table_codes)
+    bits_complets = ajouter_padding(bits_arbre + bits_donnees)
+    octets = bits_vers_octets(bits_complets)
+
+    with open(chemin_sortie, "wb") as fichier_sortie:
+        fichier_sortie.write(octets)
+
+
+def decompresser(chemin_entree, chemin_sortie):
+    """Décompresse un fichier binaire en texte avec Huffman."""
+    with open(chemin_entree, "rb") as fichier:
+        octets = fichier.read()
+
+    bits = retirer_padding(octets_vers_bits(octets))
+    index_ref = [0]
+    racine, index_apres_arbre = deserialiser_arbre(bits, index_ref)
+    texte = decoder(bits[index_apres_arbre:], racine)
+
+    with open(chemin_sortie, "w", encoding="utf-8") as fichier_sortie:
+        fichier_sortie.write(texte)
+
+
 def main():
-    parser = argparse.ArgumentParser(description="Huffman Classique Compression")
+    parser = argparse.ArgumentParser(description="Compression Huffman classique (avec arbre inclus)")
     parser.add_argument("-e", metavar="input", help="Fichier à compresser")
     parser.add_argument("-d", metavar="input", help="Fichier à décompresser")
     parser.add_argument("-o", metavar="output", required=True, help="Fichier de sortie")
     args = parser.parse_args()
 
     if args.e:
-        compress(args.e, args.o)
+        compresser(args.e, args.o)
     elif args.d:
-        decompress(args.d, args.o)
+        decompresser(args.d, args.o)
     else:
-        print("Spécifiez soit -e (encode), soit -d (decode).")
+        parser.print_help()
+        print("\nSpécifiez soit -e (encode), soit -d (decode).")
+
 
 if __name__ == "__main__":
     main()
